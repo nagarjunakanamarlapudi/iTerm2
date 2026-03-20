@@ -29,9 +29,8 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
         let originalGuid = mark.guid
 
         let dict = mark.dictionaryValue()
-        XCTAssertNotNil(dict)
 
-        let restoredMark = iTermMark(dictionary: dict!)
+        let restoredMark = iTermMark(dictionary: dict)
         XCTAssertEqual(restoredMark?.guid, originalGuid, "GUID should be preserved through serialization")
     }
 
@@ -269,10 +268,9 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
         )
 
         let dict = foldMark.dictionaryValue()
-        XCTAssertNotNil(dict)
 
         // Should include GUID from parent class
-        XCTAssertNotNil(dict!["Guid"] as? String, "FoldMark dictionary should include GUID from iTermMark")
+        XCTAssertNotNil(dict["Guid"] as? String, "FoldMark dictionary should include GUID from iTermMark")
     }
 
     func testFoldMarkGenerationIsAlwaysZero() {
@@ -287,9 +285,8 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
 
         // Serialize and deserialize - generation should still be 0
         let dict = foldMark.dictionaryValue()
-        XCTAssertNotNil(dict)
 
-        let restoredFoldMark = FoldMark(dictionary: dict!)
+        let restoredFoldMark = FoldMark(dictionary: dict)
         XCTAssertNotNil(restoredFoldMark)
         XCTAssertEqual(restoredFoldMark!.generation, 0,
                        "Restored FoldMark generation should be 0")

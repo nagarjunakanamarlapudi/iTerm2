@@ -51,8 +51,8 @@ class PortholeMark: iTermMark, PortholeMarkReading {
         }
     }
 
-    override func dictionaryValue() -> [AnyHashable : Any]! {
-        var dict = super.dictionaryValue() ?? [:]
+    override func dictionaryValue() -> [AnyHashable : Any] {
+        var dict = super.dictionaryValue()
         dict[uniqueIdentifierKey] = uniqueIdentifier
         return dict
     }

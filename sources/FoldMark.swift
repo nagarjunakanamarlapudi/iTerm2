@@ -272,7 +272,7 @@ class FoldMark: iTermMark, FoldMarkReading {
         super.init()
     }
 
-    required init!(dictionary dict: [AnyHashable : Any]!) {
+    required init?(dictionary dict: [AnyHashable : Any]) {
         savedLines = (dict[Self.savedLinesKey] as? [[AnyHashable: Any]])?.compactMap { dict -> ScreenCharArray? in
             ScreenCharArray(dictionary: dict)
         }
@@ -284,8 +284,8 @@ class FoldMark: iTermMark, FoldMarkReading {
         super.init(dictionary: dict)
     }
 
-    override func dictionaryValue() -> [AnyHashable : Any]! {
-        var result: [AnyHashable: Any] = super.dictionaryValue() ?? [:]
+    override func dictionaryValue() -> [AnyHashable : Any] {
+        var result: [AnyHashable: Any] = super.dictionaryValue()
         if let lines = savedLines?.map({ $0.dictionaryValue }) {
             result[Self.savedLinesKey] = lines
         }
