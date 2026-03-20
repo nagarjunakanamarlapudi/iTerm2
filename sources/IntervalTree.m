@@ -775,7 +775,7 @@ static NSString *const kIntervalTreeObjectsKey = @"objects";
         return nil;
     }
     if (node.left) {
-        return [self objectsWithSmallestLimitFromNode:node.left];
+        return [self objectsWithSmallestLocationFromNode:node.left];
     }
     if (node.data) {
         IntervalTreeValue *nodeValue = (IntervalTreeValue *)node.data;
@@ -787,7 +787,7 @@ static NSString *const kIntervalTreeObjectsKey = @"objects";
             return objects;
         }
     }
-    return [self objectsWithSmallestLimitFromNode:node.right];
+    return [self objectsWithSmallestLocationFromNode:node.right];
 }
 
 - (NSArray *)objectsWithSmallestLimitFromNode:(AATreeNode *)node {
