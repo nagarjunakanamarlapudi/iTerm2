@@ -116,7 +116,7 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
 
         // Convert record to dictionary format for restoration
         if let plist = record?.propertyListValue as? [AnyHashable: Any] {
-            let restored = newTree.restore(fromGraphRecord: plist, offset: 0)
+            let restored = newTree.restore(fromGraphRecord: plist, offset: 0, largeContentProvider: nil)
             XCTAssertTrue(restored, "Should successfully restore from graph record")
             XCTAssertEqual(newTree.allObjects().count, 3, "Restored tree should have 3 objects")
         } else {
@@ -139,7 +139,7 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
         // Decode
         let newTree = IntervalTree()
         if let plist = encoder.record?.propertyListValue as? [AnyHashable: Any] {
-            let restored = newTree.restore(fromGraphRecord: plist, offset: 0)
+            let restored = newTree.restore(fromGraphRecord: plist, offset: 0, largeContentProvider: nil)
             XCTAssertTrue(restored)
 
             let restoredObjects = newTree.allObjects()
@@ -174,7 +174,7 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
         // Decode
         let newTree = IntervalTree()
         if let plist = encoder.record?.propertyListValue as? [AnyHashable: Any] {
-            let restored = newTree.restore(fromGraphRecord: plist, offset: 0)
+            let restored = newTree.restore(fromGraphRecord: plist, offset: 0, largeContentProvider: nil)
             XCTAssertTrue(restored)
 
             let restoredObjects = newTree.allObjects()
@@ -205,7 +205,7 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
         // Decode
         let newTree = IntervalTree()
         if let plist = encoder.record?.propertyListValue as? [AnyHashable: Any] {
-            let restored = newTree.restore(fromGraphRecord: plist, offset: 0)
+            let restored = newTree.restore(fromGraphRecord: plist, offset: 0, largeContentProvider: nil)
             XCTAssertTrue(restored)
 
             let restoredObjects = newTree.allObjects()
@@ -236,7 +236,7 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
             ]
         ]
 
-        let result = tree.restore(fromGraphRecord: oldFormatDict, offset: 0)
+        let result = tree.restore(fromGraphRecord: oldFormatDict, offset: 0, largeContentProvider: nil)
         XCTAssertFalse(result, "Should return false for old dictionary format")
     }
 
@@ -314,7 +314,7 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
 
         let newTree = IntervalTree()
         if let plist = encoder.record?.propertyListValue as? [AnyHashable: Any] {
-            let restored = newTree.restore(fromGraphRecord: plist, offset: 0)
+            let restored = newTree.restore(fromGraphRecord: plist, offset: 0, largeContentProvider: nil)
             XCTAssertTrue(restored)
             XCTAssertEqual(newTree.allObjects().count, 0)
         } else {
@@ -461,7 +461,8 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
         restoredScreen.restore(from: state,
                                includeRestorationBanner: false,
                                reattached: false,
-                               isArchive: false)
+                               isArchive: false,
+                               largeContentProvider: nil)
 
         // Find the mark in the restored screen and verify its interval
         var restoredMark: VT100ScreenMark?
@@ -515,7 +516,8 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
         restoredScreen.restore(from: state,
                                includeRestorationBanner: false,
                                reattached: false,
-                               isArchive: false)
+                               isArchive: false,
+                               largeContentProvider: nil)
 
         // Get restored marks
         var mark1Interval: Interval?
@@ -563,7 +565,8 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
         restoredScreen.restore(from: state,
                                includeRestorationBanner: false,
                                reattached: false,
-                               isArchive: false)
+                               isArchive: false,
+                               largeContentProvider: nil)
 
         // Find the annotation
         var restoredAnnotation: PTYAnnotation?
@@ -609,7 +612,7 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
         // Decode with same offset
         let newTree = IntervalTree()
         if let plist = encoder.record?.propertyListValue as? [AnyHashable: Any] {
-            let restored = newTree.restore(fromGraphRecord: plist, offset: offset)
+            let restored = newTree.restore(fromGraphRecord: plist, offset: offset, largeContentProvider: nil)
             XCTAssertTrue(restored)
 
             let restoredObjects = newTree.allObjects()
@@ -649,7 +652,7 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
 
         let newTree = IntervalTree()
         if let plist = encoder.record?.propertyListValue as? [AnyHashable: Any] {
-            let restored = newTree.restore(fromGraphRecord: plist, offset: offset)
+            let restored = newTree.restore(fromGraphRecord: plist, offset: offset, largeContentProvider: nil)
             XCTAssertTrue(restored)
             XCTAssertEqual(newTree.allObjects().count, 3)
 
@@ -690,7 +693,7 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
             return
         }
 
-        let restored = newTree.restore(fromGraphRecord: plist, offset: 0)
+        let restored = newTree.restore(fromGraphRecord: plist, offset: 0, largeContentProvider: nil)
         XCTAssertTrue(restored, "Should restore successfully", file: file, line: line)
         XCTAssertEqual(newTree.allObjects().count, 1, "Should have one object", file: file, line: line)
 
@@ -881,7 +884,7 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
             return
         }
 
-        let restored = newTree.restore(fromGraphRecord: plist, offset: 0)
+        let restored = newTree.restore(fromGraphRecord: plist, offset: 0, largeContentProvider: nil)
         XCTAssertTrue(restored, "Should restore successfully")
 
         // CRITICAL: Both objects should be restored
@@ -931,7 +934,7 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
             return
         }
 
-        let restored = newTree.restore(fromGraphRecord: plist, offset: 0)
+        let restored = newTree.restore(fromGraphRecord: plist, offset: 0, largeContentProvider: nil)
         XCTAssertTrue(restored)
         XCTAssertEqual(newTree.allObjects().count, 4, "All 4 objects should be restored")
 
@@ -1000,7 +1003,7 @@ class IntervalTreeGraphEncodingTests: XCTestCase {
             return
         }
 
-        let restored = newTree.restore(fromGraphRecord: plist, offset: 0)
+        let restored = newTree.restore(fromGraphRecord: plist, offset: 0, largeContentProvider: nil)
         XCTAssertTrue(restored)
         XCTAssertEqual(newTree.allObjects().count, 9, "All 9 objects should be restored")
 

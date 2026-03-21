@@ -10,8 +10,8 @@ import Foundation
 
 // MARK: - MockiTermLargeContentProvider
 
-/// Mock implementation of iTermLargeContentProvider for testing lazy loading behavior.
-@objc class MockiTermLargeContentProvider: NSObject, iTermLargeContentProvider {
+/// Mock implementation of LargeContentProvider for testing lazy loading behavior.
+@objc class MockiTermLargeContentProvider: NSObject, LargeContentProvider {
     /// Number of times loadLargeContent was called
     var loadCallCount = 0
 

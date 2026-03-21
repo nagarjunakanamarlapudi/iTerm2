@@ -303,15 +303,15 @@ class iTermFoldMarkLazyLoadingTests: XCTestCase {
 class iTermProviderPlumbingTests: XCTestCase {
 
     func testGraphDatabaseConformsToProvider() {
-        // iTermGraphDatabase should conform to iTermLargeContentProvider
+        // iTermGraphDatabase should conform to LargeContentProvider
         // This is verified by checking if the class responds to the protocol method
         // Since iTermGraphDatabase is not directly available in Swift, we use NSClassFromString
         guard let dbClass = NSClassFromString("iTermGraphDatabase") else {
             XCTFail("iTermGraphDatabase class not found")
             return
         }
-        XCTAssertTrue(dbClass.conforms(to: iTermLargeContentProvider.self),
-                     "iTermGraphDatabase should conform to iTermLargeContentProvider")
+        XCTAssertTrue(dbClass.conforms(to: LargeContentProvider.self),
+                     "iTermGraphDatabase should conform to LargeContentProvider")
     }
 
     func testLargeContentMetadataCreation() {
