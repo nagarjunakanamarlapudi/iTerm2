@@ -67,3 +67,7 @@ iTermBrowserPlugin/iTermBrowserPlugin.xcodeproj/project.xcworkspace/xcuserdata/g
 .claude/*.local.json
 EastAsianWidth.txt
 emoji-data.txt
+
+# Unicode data cache for generate_nscharacterset.py
+tools/.unicode_cache/
+emoji-sequences.txt

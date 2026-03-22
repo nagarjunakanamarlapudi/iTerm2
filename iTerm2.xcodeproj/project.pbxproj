@@ -935,7 +935,6 @@
 		5ECE005F1454E59B004861E9 /* PseudoTerminalRestorer.h in Headers */ = {isa = PBXBuildFile; fileRef = 5ECE005D1454E59B004861E9 /* PseudoTerminalRestorer.h */; };
 		63784809C4F1C06074729416 /* IntervalTreeForwardLocationEnumeratorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110B6BC5FB568BC2E0CCADB2 /* IntervalTreeForwardLocationEnumeratorTests.swift */; };
 		639530D5AD779882EF35DAE4 /* iTermLargeContentObject.h in Sources */ = {isa = PBXBuildFile; fileRef = 13C5AE44EEA24B945DE0A064 /* iTermLargeContentObject.h */; };
-		63369481B151F25EFC025E18 /* iTermCharacterWidth.h in Sources */ = {isa = PBXBuildFile; fileRef = C053D69A1C5061D261E50516 /* iTermCharacterWidth.h */; };
 		6998793AE8C54A0EAE7D5D0F /* PillBackgroundRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F3AA921DF1744D7BA890104 /* PillBackgroundRenderer.swift */; };
 		70C067D3E9484CA9A48D69BD /* ButtonPillInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7E1E38CBCE5463DA81CC1CF /* ButtonPillInfo.swift */; };
 		745A29B54D2537CEDE30520E /* iTermLargeContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17306A9E43DF81BD3B73C4B3 /* iTermLargeContent.swift */; };
@@ -4664,6 +4663,8 @@
 		A6EB643C2D5D805500481D33 /* AIExplanationResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6EB643B2D5D804F00481D33 /* AIExplanationResponse.swift */; };
 		A6EB647E2D5E8EE400481D33 /* MessageCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6EB647D2D5E8EE200481D33 /* MessageCellView.swift */; };
 		A6EB64802D5E906800481D33 /* RemoteCommandExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6EB647F2D5E906500481D33 /* RemoteCommandExecutor.swift */; };
+		A6EBEC3E2F7061A6009F5D5D /* iTermCharacterWidth.c in Sources */ = {isa = PBXBuildFile; fileRef = A6EBEC3D2F7061A6009F5D5D /* iTermCharacterWidth.c */; };
+		A6EBEC3F2F7061A6009F5D5D /* iTermCharacterWidth.h in Headers */ = {isa = PBXBuildFile; fileRef = A6EBEC3C2F7061A6009F5D5D /* iTermCharacterWidth.h */; };
 		A6EC0B062C87DF5E00598D20 /* uniE0D7_Powerline_normal-left-inverse-cutout.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A6EC0B042C87DF5E00598D20 /* uniE0D7_Powerline_normal-left-inverse-cutout.pdf */; };
 		A6EC0B072C87DF5E00598D20 /* uniE0D7_Powerline_normal-left-inverse-cutout.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A6EC0B042C87DF5E00598D20 /* uniE0D7_Powerline_normal-left-inverse-cutout.pdf */; };
 		A6EC0B082C87DF5E00598D20 /* uniE0D7_Powerline_normal-left-inverse-cutout.pdf in Resources */ = {isa = PBXBuildFile; fileRef = A6EC0B042C87DF5E00598D20 /* uniE0D7_Powerline_normal-left-inverse-cutout.pdf */; };
@@ -5169,7 +5170,6 @@
 		D9A2368683D7DDB73A826821 /* iTermStreamingPNGWriter.m in Sources */ = {isa = PBXBuildFile; fileRef = 11C735CA9A1AF5E864EC718E /* iTermStreamingPNGWriter.m */; };
 		DCE63F57A37160221DC5B939 /* iTermScreenshotPreviewOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE6718DDCFD2CA382391CDFD /* iTermScreenshotPreviewOverlay.swift */; };
 		DDF0FD65062916F70080EF74 /* iTermApplication.h in Headers */ = {isa = PBXBuildFile; fileRef = DDF0FD63062916F70080EF74 /* iTermApplication.h */; };
-		E8EA68841F17CAE8DEE12BEC /* iTermCharacterWidth.c in Sources */ = {isa = PBXBuildFile; fileRef = CACB86644FE84D0BF1B22373 /* iTermCharacterWidth.c */; };
 		EDD2335A6BDA84CE2B29C285 /* Box.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10731A1F54B9BF72FBAC682 /* Box.swift */; };
 		EE293B4DA9D2204FCFDE6784 /* iTermCursorSlideAnimator.h in Sources */ = {isa = PBXBuildFile; fileRef = 889A9128E944B618CDE75E18 /* iTermCursorSlideAnimator.h */; };
 		EEBDD6CF78595292D0CF8977 /* PrivateIPCheckerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F85D24451C27760B7C75BC /* PrivateIPCheckerTests.swift */; };
@@ -8870,6 +8870,8 @@
 		A6EB643B2D5D804F00481D33 /* AIExplanationResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIExplanationResponse.swift; sourceTree = "<group>"; };
 		A6EB647D2D5E8EE200481D33 /* MessageCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCellView.swift; sourceTree = "<group>"; };
 		A6EB647F2D5E906500481D33 /* RemoteCommandExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCommandExecutor.swift; sourceTree = "<group>"; };
+		A6EBEC3C2F7061A6009F5D5D /* iTermCharacterWidth.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = iTermCharacterWidth.h; sourceTree = "<group>"; };
+		A6EBEC3D2F7061A6009F5D5D /* iTermCharacterWidth.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = iTermCharacterWidth.c; sourceTree = "<group>"; };
 		A6EC0B042C87DF5E00598D20 /* uniE0D7_Powerline_normal-left-inverse-cutout.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = "uniE0D7_Powerline_normal-left-inverse-cutout.pdf"; path = "ThirdParty/PowerlineExtraSymbols/uniE0D7_Powerline_normal-left-inverse-cutout.pdf"; sourceTree = "<group>"; };
 		A6EC0B052C87DF5E00598D20 /* uniE0D6_Powerline_normal-right-inverse-cutout.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; name = "uniE0D6_Powerline_normal-right-inverse-cutout.pdf"; path = "ThirdParty/PowerlineExtraSymbols/uniE0D6_Powerline_normal-right-inverse-cutout.pdf"; sourceTree = "<group>"; };
 		A6EC0B0E2C9C9AA800598D20 /* FoldMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoldMark.swift; sourceTree = "<group>"; };
@@ -9169,11 +9171,9 @@
 		AE6718DDCFD2CA382391CDFD /* iTermScreenshotPreviewOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = iTermScreenshotPreviewOverlay.swift; sourceTree = "<group>"; };
 		AF19E441FF824539A275D8DA /* iTermLayoutCalculator.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = iTermLayoutCalculator.m; sourceTree = "<group>"; };
 		B231EDB860248C368A511B42 /* iTermEventTriggerEvaluator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = iTermEventTriggerEvaluator.swift; sourceTree = "<group>"; };
-		C053D69A1C5061D261E50516 /* iTermCharacterWidth.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = iTermCharacterWidth.h; sourceTree = "<group>"; };
 		C08AA4008946722C3F4C67C1 /* WordSelectionAtom.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WordSelectionAtom.swift; sourceTree = "<group>"; };
 		C6675EBA1C4FE96B0041173B /* iTermSelectorSwizzler.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = iTermSelectorSwizzler.h; sourceTree = "<group>"; };
 		C6675EBB1C4FE96B0041173B /* iTermSelectorSwizzler.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = iTermSelectorSwizzler.m; sourceTree = "<group>"; };
-		CACB86644FE84D0BF1B22373 /* iTermCharacterWidth.c */ = {isa = PBXFileReference; includeInIndex = 1; path = iTermCharacterWidth.c; sourceTree = "<group>"; };
 		CB2F48F836C5732146BCEDD9 /* iTermStreamingPNGWriter.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = iTermStreamingPNGWriter.h; sourceTree = "<group>"; };
 		D3CE2D4C1A00936F0098ED99 /* PSMDarkTabStyle.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PSMDarkTabStyle.h; sourceTree = "<group>"; };
 		D3CE2D4D1A00936F0098ED99 /* PSMDarkTabStyle.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PSMDarkTabStyle.m; sourceTree = "<group>"; };
@@ -9249,28 +9249,8 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		9C0F690213C696BCC28C2EDF /* PerformanceTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = PerformanceTests;
-			sourceTree = "<group>";
-		};
-		A6A723AF2DC04C2200A8115D /* ModernTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = ModernTests;
-			sourceTree = "<group>";
-		};
+		9C0F690213C696BCC28C2EDF /* PerformanceTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = PerformanceTests; sourceTree = "<group>"; };
+		A6A723AF2DC04C2200A8115D /* ModernTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = ModernTests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -9447,7 +9427,7 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		0464AB0D006CD2EC7F000001 = {
+		0464AB0D006CD2EC7F000001 /* JTerminal */ = {
 			isa = PBXGroup;
 			children = (
 				A6B1C69D2DC15898008AD3CA /* ModernTests.xctestplan */,
@@ -11657,6 +11637,8 @@
 				A6D463E5240447AF005D073D /* iTermBackgroundColorView.m */,
 				A6E2A6192B8D619A00EC6070 /* iTermCharacterBuffer.h */,
 				A6E2A61A2B8D619A00EC6070 /* iTermCharacterBuffer.m */,
+				A6EBEC3C2F7061A6009F5D5D /* iTermCharacterWidth.h */,
+				A6EBEC3D2F7061A6009F5D5D /* iTermCharacterWidth.c */,
 				A6F1B3BA269379D000546767 /* iTermClickSideEffects.h */,
 				1D407A2714BABE8700BD5035 /* iTermController.h */,
 				E8A66F030272453F03A80106 /* iTermController.m */,
@@ -15470,6 +15452,7 @@
 				A605A2032EB2DB2A0072ED7E /* VT100ScreenProgress.h in Headers */,
 				A66719171DCE36C3000CE608 /* NSDate+iTerm.h in Headers */,
 				A6BCAAD821F6F53E0000CD29 /* iTermTextPopoverViewController.h in Headers */,
+				A6EBEC3F2F7061A6009F5D5D /* iTermCharacterWidth.h in Headers */,
 				A66719181DCE36C3000CE608 /* iTermBaseHotKey.h in Headers */,
 				A6587A4721D82B4200794775 /* iTermStandardKeyMapper.h in Headers */,
 				A6180D7821A883860073F219 /* iTermBroadcastPasswordHelper.h in Headers */,
@@ -16477,7 +16460,7 @@
 				en,
 				Base,
 			);
-			mainGroup = 0464AB0D006CD2EC7F000001;
+			mainGroup = 0464AB0D006CD2EC7F000001 /* JTerminal */;
 			packageReferences = (
 				A62E3BC62E1CC674002DF8C3 /* XCLocalSwiftPackageReference "WebExtensionsFramework" */,
 			);
@@ -18855,8 +18838,6 @@
 				A60EBD171FAED952008C7F5B /* iTermCopyBackground.metal in Sources */,
 				A67960E81F8202C0008A42BC /* iTermBackgroundImage.metal in Sources */,
 				4705C05130977E2C81FD75E8 /* iTermUnicodeNormalization.h in Sources */,
-				63369481B151F25EFC025E18 /* iTermCharacterWidth.h in Sources */,
-				E8EA68841F17CAE8DEE12BEC /* iTermCharacterWidth.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -19547,6 +19528,7 @@
 				A601F8902328B3E800EEE4DC /* iTermWeakReference.m in Sources */,
 				A640487229BFCBCB0063C34A /* SpecialExceptionsWindowController.swift in Sources */,
 				A6D10E3927F7C2BC0026DB56 /* StringProtocol+MultiCursor.swift in Sources */,
+				A6EBEC3E2F7061A6009F5D5D /* iTermCharacterWidth.c in Sources */,
 				534B6C6923DC20120031FED2 /* PasteEvent.m in Sources */,
 				A6EC0B122C9FA78600598D20 /* Interval+Additions.m in Sources */,
 				A67A500726C73EDA00281693 /* VT100Terminal.m in Sources */,

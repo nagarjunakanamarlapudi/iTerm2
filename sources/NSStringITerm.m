@@ -979,7 +979,7 @@ int decode_utf8_char(const unsigned char *datap,
     if ([self rangeOfCharacterFromSet:[NSCharacterSet it_base64Characters].invertedSet].location == NSNotFound) {
         return YES;
     }
-    if ([self rangeOfCharacterFromSet:[NSCharacterSet it_urlSafeBse64Characters].invertedSet].location == NSNotFound) {
+    if ([self rangeOfCharacterFromSet:[NSCharacterSet it_urlSafeBase64Characters].invertedSet].location == NSNotFound) {
         return YES;
     }
     return NO;

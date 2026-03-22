@@ -34,6 +34,6 @@ extern unichar iTermMinimumDefaultEmojiPresentationCodePoint;
 + (NSCharacterSet *)strongLTRCodePoints;
 + (NSCharacterSet *)it_unsafeForDisplayCharacters;
 + (NSCharacterSet *)it_base64Characters;
-+ (NSCharacterSet *)it_urlSafeBse64Characters;
++ (NSCharacterSet *)it_urlSafeBase64Characters;
 
 @end
