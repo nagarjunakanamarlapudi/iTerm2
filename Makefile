@@ -356,7 +356,7 @@ sfsymbolenum:
 	cd submodules/SFSymbolEnum && swift generateSFSymbolEnum.swift --objc > ../../ThirdParty/SFSymbolEnum/SFSymbolEnum.h
 	cd submodules/SFSymbolEnum && swift generateSFSymbolEnum.swift --objc-impl > ../../ThirdParty/SFSymbolEnum/SFSymbolEnum.m
 
-# Regenerate NSCharacterSet+iTerm.m from latest Unicode data.
+# Regenerate NSCharacterSet+iTerm.m and iTermCharacterSets.m from latest Unicode data.
 # Run this when a new Unicode version is released.
 unicode:
 	rm -rf tools/.unicode_cache
