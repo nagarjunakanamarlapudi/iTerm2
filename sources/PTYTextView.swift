@@ -1189,3 +1189,6 @@ extension PTYTextView {
         didFoldOrUnfold()
     }
 }
+
+// MARK: - Extend URL Search Results Across Soft Boundaries
+
