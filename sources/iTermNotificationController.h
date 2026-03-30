@@ -111,4 +111,12 @@
      callbackNotificationUserInfo:(NSDictionary *)userInfo
                 actionButtonTitle:(NSString *)actionButtonTitle;
 
+// Claude permission notification — time-sensitive, grouped, with sound rate limiting
+- (BOOL)notifyClaudePermission:(NSString *)agentName
+                          tool:(NSString *)toolDescription
+                       project:(NSString *)projectName
+                   windowIndex:(int)windowIndex
+                      tabIndex:(int)tabIndex
+                     viewIndex:(int)viewIndex;
+
 @end

@@ -77,9 +77,18 @@ static BOOL gForceSaveState;
     [[iTermUserDefaults userDefaults] setBool:forceSaveState forKey:@"NoSyncWindowRestoresWorkspaceAtLaunch"];
 }
 
+- (void)eraseStateForCleanStart {
+    DLog(@"eraseStateForCleanStart");
+    [_driver eraseSynchronously:YES];
+}
+
 - (instancetype)init {
     self = [super init];
     if (self) {
+        // Always enable state saving. Without this, macOS system settings can
+        // cause state to be erased on quit. The "close all tabs before quit"
+        // case is handled separately by eraseStateForCleanStart.
+        [[iTermUserDefaults userDefaults] setBool:YES forKey:@"NSQuitAlwaysKeepsWindows"];
         _systemCallbacks = [NSMutableDictionary dictionary];
         dispatch_queue_t queue = dispatch_queue_create("com.iterm2.restorable-state", DISPATCH_QUEUE_SERIAL);
         NSString *appSupport = [[NSFileManager defaultManager] applicationSupportDirectory];
@@ -141,9 +150,6 @@ static BOOL gForceSaveState;
 
 - (void)saveRestorableState {
     assert([NSThread isMainThread]);
-    if (![iTermRestorableStateController stateRestorationEnabled]) {
-        return;
-    }
     if (_driver.restoring) {
         DLog(@"Currently restoring. Set needsSave.");
         _driver.needsSave = YES;
@@ -199,17 +205,20 @@ static BOOL gForceSaveState;
 // windows have already been closed.
 - (void)applicationWillTerminate:(NSNotification *)notification {
     DLog(@"application will terminate");
-    if (![iTermRestorableStateController stateRestorationEnabled]) {
-        DLog(@"State restoration disabled. Erase state.");
-        [_driver eraseSynchronously:YES];
-        return;
-    }
+    NSInteger windowCount = [self.delegate restorableStateWindows].count;
     if (_driver.restoring) {
         DLog(@"Still restoring so don't save");
         return;
     }
-    DLog(@"Calling saveSynchronously.");
-    [_driver saveSynchronously];
+    if (windowCount > 0) {
+        // Windows are open — save state for restoration on next launch.
+        DLog(@"Calling saveSynchronously.");
+        [_driver saveSynchronously];
+    } else {
+        // User closed all windows before quitting — erase state for a clean start.
+        DLog(@"No windows, erasing state.");
+        [_driver eraseSynchronously:YES];
+    }
     _driver = nil;
 }
 
@@ -219,11 +228,7 @@ static BOOL gForceSaveState;
     assert([NSThread isMainThread]);
     _ready = YES;
     dispatch_group_leave(_completionGroup);
-    if (![iTermRestorableStateController stateRestorationEnabled]) {
-        // Just in case we don't get a chance to erase the state later.
-        DLog(@"State restoration is disabled so erase db");
-        [_driver eraseSynchronously:NO];
-    } else if (_driver.needsSave) {
+    if (_driver.needsSave) {
         [_driver save];
     }
     [self invokeRemainingCompletionBlocksAsFailure];

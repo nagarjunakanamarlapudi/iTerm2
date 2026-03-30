@@ -190,6 +190,42 @@ NSString *const iTermAPIServerConnectionClosed = @"iTermAPIServerConnectionClose
     }
     chmod([iTermAPIServer unixSocketPath].UTF8String, (S_IRUSR | S_IWUSR));
 
+    // When running as AiTerm (com.nkanamar.aiterm), also create a symlink at the
+    // standard iTerm2 socket path so Claude Code and other tools can find the API.
+    // This enables the dual-socket approach for coexistence with iTerm2.
+    NSString *bundleId = [[NSBundle mainBundle] bundleIdentifier];
+    if ([bundleId isEqualToString:@"com.nkanamar.aiterm"]) {
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSString *iTerm2Folder = [[fm homeDirectoryForCurrentUser].path
+            stringByAppendingPathComponent:@"Library/Application Support/iTerm2/private"];
+        NSString *iTerm2SocketPath = [iTerm2Folder stringByAppendingPathComponent:@"socket"];
+
+        // Only create symlink if iTerm2 is NOT currently using it
+        struct stat st;
+        BOOL shouldLink = YES;
+        if (lstat(iTerm2SocketPath.UTF8String, &st) == 0) {
+            // File exists — check if it's a stale socket or active
+            int testFd = socket(AF_UNIX, SOCK_STREAM, 0);
+            if (testFd >= 0) {
+                struct sockaddr_un addr;
+                memset(&addr, 0, sizeof(addr));
+                addr.sun_family = AF_UNIX;
+                strlcpy(addr.sun_path, iTerm2SocketPath.UTF8String, sizeof(addr.sun_path));
+                if (connect(testFd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+                    // Someone is listening — iTerm2 is running, don't clobber
+                    shouldLink = NO;
+                }
+                close(testFd);
+            }
+        }
+        if (shouldLink) {
+            [fm createDirectoryAtPath:iTerm2Folder withIntermediateDirectories:YES
+                           attributes:@{ NSFilePosixPermissions: @(S_IRWXU) } error:nil];
+            unlink(iTerm2SocketPath.UTF8String);
+            symlink(path.UTF8String, iTerm2SocketPath.UTF8String);
+        }
+    }
+
     BOOL ok = [_unixSocket listenWithBacklog:5 accept:^(int fd, iTermSocketAddress *clientAddress, NSNumber *euid) {
         [self didAcceptConnectionOnFileDescriptor:fd fromAddress:clientAddress euid:euid retries:1];
     }];

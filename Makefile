@@ -109,6 +109,11 @@ Development:
 	xcodebuild -scheme iTerm2 -configuration Development -destination 'platform=macOS' -skipPackagePluginValidation $(SIGNING_FLAGS) $(ARCH_FLAGS) SYMROOT="$(BUILD_DIR)" && \
 	chmod -R go+rX $(BUILD_DIR)/Development
 
+AITERM_VERSION ?= 1.0.0
+
+aiterm: Development
+	@AITERM_VERSION=$(AITERM_VERSION) ./tools/deploy-aiterm.sh --skip-build
+
 Beta:
 	cp plists/beta-iTerm2.plist plists/iTerm2.plist
 	xcodebuild -scheme iTerm2 -configuration Beta -destination 'platform=macOS' -skipPackagePluginValidation $(SIGNING_FLAGS) $(ARCH_FLAGS) SYMROOT="$(BUILD_DIR)" ENABLE_ADDRESS_SANITIZER=NO && \
@@ -125,6 +130,9 @@ Nightly: force
 
 run: Development
 	$(BUILD_DIR)/Development/iTerm2.app/Contents/MacOS/iTerm2 -suite iterm2-dev
+
+run-prod: Development
+	open $(BUILD_DIR)/Development/iTerm2.app
 
 devzip: Development
 	cd $(BUILD_DIR)/Development && \

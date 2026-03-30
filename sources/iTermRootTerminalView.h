@@ -12,6 +12,7 @@
 
 @class iTermImageView;
 @class iTermRootTerminalView;
+@class VTSidebarHostingView;
 @class iTermStatusBarViewController;
 @protocol iTermSwipeHandler;
 @class iTermTabBarControlView;
@@ -20,6 +21,7 @@
 @protocol iTermToolbeltViewDelegate;
 @protocol PSMTabBarControlDelegate;
 @protocol PSMPUAFontProvider;
+@class DashboardHostingView;
 @class PTYTabView;
 
 @protocol iTermRootTerminalViewDelegate<iTermTabBarControlViewDelegate, iTermSwipeHandler>
@@ -88,6 +90,14 @@ extern const NSInteger iTermRootTerminalViewWindowNumberLabelWidth;
 // This is a sometimes-visible control that shows the tabs and lets the user
 // change which is visible.
 @property(nonatomic, readonly) iTermTabBarControlView *tabBarControl;
+
+// Vertical tab sidebar (replaces PSMTabBarControl in left-tab mode)
+@property(nonatomic, readonly) VTSidebarHostingView *verticalTabSidebar;
+
+// Dashboard mode: when YES, tabView is hidden and dashboardView fills its frame.
+@property(nonatomic, readonly) BOOL isDashboardMode;
+@property(nonatomic, strong) NSView *dashboardView;
+- (void)setDashboardMode:(BOOL)dashboardMode;
 
 // Gray line dividing tab/title bar from content. Will be nil if a division
 // view isn't needed such as for fullscreen windows or windows without a

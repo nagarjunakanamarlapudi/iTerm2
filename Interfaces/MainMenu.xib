@@ -995,6 +995,18 @@ Gw
                                     <action selector="showHideNotes:" target="-1" id="bWx-ZS-6aE"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Show Reasoning Panel" keyEquivalent="R" identifier="Show Reasoning Panel" id="rP0-kL-7qZ">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="toggleReasoningPanel:" target="-1" id="rP1-aM-8bX"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Show Terminal Dashboard" keyEquivalent="b" identifier="Show Terminal Dashboard" id="dB0-kL-9qZ">
+                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                <connections>
+                                    <action selector="toggleDashboard:" target="-1" id="dB1-aM-0bX"/>
+                                </connections>
+                            </menuItem>
                             <menuItem title="Show Composer" keyEquivalent="." identifier="Composer" id="Bhs-45-5yR">
                                 <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
                                 <connections>

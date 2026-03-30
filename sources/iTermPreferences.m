@@ -213,6 +213,10 @@ NSString *const kPreferenceKeyHTMLTabTitles = @"HTMLTabTitles";
 NSString *const kPreferenceKeyDisableTransparencyForKeyWindow = @"DisableTransparencyForKeyWindow";
 NSString *const kPreferenceKeyNeverBlockSystemShutdown = @"NeverBlockSystemShutdown";
 
+// Reasoning panel preferences (NoSync — not exposed in preferences UI)
+NSString *const kPreferenceKeyReasoningPanelOpacity = @"NoSyncReasoningPanelOpacity";
+NSString *const kPreferenceKeyReasoningPanelCondensed = @"NoSyncReasoningPanelCondensed";
+
 NSString *const kPreferenceKeyOpenAIAPIKey = @"NoSyncOpenAIAPIKey";  // deprecated
 NSString *const kPreferenceKeyAIAPIKey = @"NoUserDefaultAIAPIKey";
 NSString *const kPreferenceKeyAIPrompt = @"AI Prompt";
@@ -668,7 +672,10 @@ static NSString *sPreviousVersion;
                   kPreferenceKeyHTMLTabTitles: @NO,
 
                   kPreferenceKeyDisableTransparencyForKeyWindow: @NO,
-                  kPreferenceKeyNeverBlockSystemShutdown: @NO
+                  kPreferenceKeyNeverBlockSystemShutdown: @NO,
+
+                  kPreferenceKeyReasoningPanelOpacity: @1.0,
+                  kPreferenceKeyReasoningPanelCondensed: @YES,
               };
     }
     return dict;

@@ -423,4 +423,72 @@ didReceiveNotificationResponse:(UNNotificationResponse *)response
     completionHandler();
 }
 
+#pragma mark Claude Permission Notifications
+
+static NSTimeInterval _lastClaudePermissionSoundTime = 0;
+
+- (BOOL)notifyClaudePermission:(NSString *)agentName
+                          tool:(NSString *)toolDescription
+                       project:(NSString *)projectName
+                   windowIndex:(int)windowIndex
+                      tabIndex:(int)tabIndex
+                     viewIndex:(int)viewIndex {
+    DLog(@"Claude permission notification: agent=%@ tool=%@ project=%@ window=%d tab=%d view=%d",
+         agentName, toolDescription, projectName, windowIndex, tabIndex, viewIndex);
+
+    [self ensureNotificationPermissionsWithCompletion:^(BOOL granted) {
+        if (!granted) return;
+
+        UNMutableNotificationContent *content = [[UNMutableNotificationContent alloc] init];
+        content.title = @"Claude Code";
+
+        NSString *subtitle = agentName.length > 0
+            ? [NSString stringWithFormat:@"%@ needs approval", agentName]
+            : @"Needs approval";
+        if (projectName.length > 0) {
+            subtitle = [NSString stringWithFormat:@"%@ \u2014 %@", projectName, subtitle];
+        }
+        content.subtitle = subtitle;
+        content.body = toolDescription.length > 0 ? toolDescription : @"Permission requested";
+
+        NSDictionary *context = nil;
+        if (windowIndex >= 0) {
+            context = @{ @"win": @(windowIndex),
+                         @"tab": @(tabIndex),
+                         @"view": @(viewIndex) };
+        }
+        content.userInfo = context ?: @{};
+
+        // Group by Claude permission thread
+        content.threadIdentifier = @"claude-permission";
+
+        // Time-sensitive to break through Focus modes
+        if (@available(macOS 12.0, *)) {
+            content.interruptionLevel = UNNotificationInterruptionLevelTimeSensitive;
+        }
+
+        // Sound rate limiting: play sound only if >3 seconds since last
+        NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+        if (now - _lastClaudePermissionSoundTime > 3.0) {
+            content.sound = [UNNotificationSound soundNamed:@"Ping"];
+            _lastClaudePermissionSoundTime = now;
+        }
+
+        // Use tab-based identifier so new permission replaces previous for same tab
+        NSString *identifier = [NSString stringWithFormat:@"claude-permission-tab-%d", tabIndex];
+        UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:identifier
+                                                                              content:content
+                                                                              trigger:nil];
+
+        [[UNUserNotificationCenter currentNotificationCenter] addNotificationRequest:request
+                                                               withCompletionHandler:^(NSError * _Nullable error) {
+            if (error) {
+                DLog(@"Error posting Claude permission notification: %@", error);
+            }
+        }];
+    }];
+
+    return YES;
+}
+
 @end

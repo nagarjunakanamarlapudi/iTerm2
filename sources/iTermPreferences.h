@@ -348,6 +348,10 @@ extern NSString *const kPreferenceKeySnippets;
 extern NSString *const kPreferenceKeyDisableTransparencyForKeyWindow;
 extern NSString *const kPreferenceKeyNeverBlockSystemShutdown;
 
+// Reasoning panel (NoSync — not in the preferences UI)
+extern NSString *const kPreferenceKeyReasoningPanelOpacity;
+extern NSString *const kPreferenceKeyReasoningPanelCondensed;
+
 extern NSString *const iTermDefaultAIPrompt;
 
 @interface iTermPreferences : NSObject

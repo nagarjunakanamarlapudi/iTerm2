@@ -43,6 +43,7 @@ int main(int argc, const char *argv[]) {
     // Parse -suite argument before any UserDefaults access.
     // Uses -suite (not --suite=) so Cocoa's argument parser treats it as a
     // standard -key value pair and doesn't misparse subsequent arguments.
+    BOOL hasSuiteArg = NO;
     for (int i = 1; i + 1 < argc; i++) {
         if (strcmp(argv[i], "-suite") == 0) {
             NSString *suiteName = [NSString stringWithUTF8String:argv[i + 1]];
@@ -50,7 +51,18 @@ int main(int argc, const char *argv[]) {
             // Also set the custom socket prefix for file descriptor sockets
             NSString *prefix = [NSString stringWithFormat:@"%@.socket.", suiteName];
             iTermFileDescriptorSetSocketNamePrefix(prefix.UTF8String);
+            hasSuiteArg = YES;
             break;
+        }
+    }
+    // Auto-detect AiTerm bundle ID and set isolated suite (no wrapper script needed)
+    if (!hasSuiteArg) {
+        NSString *bundleId = [[NSBundle mainBundle] bundleIdentifier];
+        if ([bundleId isEqualToString:@"com.nkanamar.aiterm"]) {
+            NSString *suiteName = @"com.nkanamar.aiterm.settings";
+            [iTermUserDefaults setCustomSuiteName:suiteName];
+            NSString *prefix = [NSString stringWithFormat:@"%@.socket.", suiteName];
+            iTermFileDescriptorSetSocketNamePrefix(prefix.UTF8String);
         }
     }
     if ([[iTermUserDefaults userDefaults] boolForKey:@"MetalCaptureEnabled"]) {

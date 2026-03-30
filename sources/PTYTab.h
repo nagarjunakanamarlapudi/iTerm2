@@ -87,6 +87,8 @@ extern NSString *const PTYTabArrangementOptionsPendingJumps;
 // Set to nil to use the default behavior. This is a swifty string.
 @property (nonatomic, copy) NSString *titleOverride;
 @property(nonatomic, getter=isPinned) BOOL pinned;
+@property(nonatomic, copy, nullable) NSString *sidebarGroupId;
+@property(nonatomic, copy, nullable) NSString *claudeSessionId;
 @property(nonatomic, readonly) NSString *title;  // the effective title
 @property (nonatomic, readonly) iTermVariableScope<iTermTabScope> *variablesScope;
 @property(nonatomic, readonly) iTermMetalUnavailableReason metalUnavailableReason;

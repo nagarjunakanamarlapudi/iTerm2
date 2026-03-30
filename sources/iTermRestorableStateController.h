@@ -37,6 +37,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)stateRestorationEnabled;
 
 - (void)saveRestorableState;
+- (void)eraseStateForCleanStart;
 
 // Call exactly one of these at startup:
 - (void)restoreWindowsWithCompletion:(void (^)(void))completion;

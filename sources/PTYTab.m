@@ -92,6 +92,8 @@ static NSString* TAB_ARRANGEMENT_COLOR = @"Tab color";  // DEPRECATED - Each PTY
 static NSString* TAB_ARRANGEMENT_TITLE_OVERRIDE = @"Title Override";
 static NSString* TAB_GUID = @"Tab GUID";
 static NSString* TAB_ARRANGEMENT_PINNED = @"Pinned";
+static NSString* TAB_ARRANGEMENT_SIDEBAR_GROUP_ID = @"Sidebar Group ID";
+static NSString* TAB_ARRANGEMENT_CLAUDE_SESSION_ID = @"Claude Session ID";
 
 static const BOOL USE_THIN_SPLITTERS = YES;
 
@@ -235,6 +237,8 @@ static void SetAgainstGrainDim(BOOL isVertical, NSSize *dest, CGFloat value) {
     iTermBuiltInFunctions *_methods;
     iTermTmuxOptionMonitor *_tmuxTitleMonitor;
     BOOL _pinned;
+    NSString *_sidebarGroupId;
+    NSString *_claudeSessionId;
 }
 
 @synthesize parentWindow = parentWindow_;
@@ -3405,6 +3409,8 @@ static void SetAgainstGrainDim(BOOL isVertical, NSSize *dest, CGFloat value) {
                                                        options:options]];
     theTab.titleOverride = [arrangement[TAB_ARRANGEMENT_TITLE_OVERRIDE] nilIfNull];
     theTab->_pinned = [arrangement[TAB_ARRANGEMENT_PINNED] boolValue];
+    theTab->_sidebarGroupId = [arrangement[TAB_ARRANGEMENT_SIDEBAR_GROUP_ID] copy];
+    theTab->_claudeSessionId = [arrangement[TAB_ARRANGEMENT_CLAUDE_SESSION_ID] copy];
     NSString *guid = arrangement[TAB_GUID];
     if (guid) {
         if ([[iTermController sharedInstance] tabWithGUID:guid] ||
@@ -3740,6 +3746,12 @@ NSString *const PTYTabArrangementOptionsPendingJumps = @"PTYTabArrangementOption
                    options:(NSDictionary *)options {
     DLog(@"Encode tab %@", self);
     encoder[TAB_ARRANGEMENT_PINNED] = @(self.isPinned);
+    if (self.sidebarGroupId) {
+        encoder[TAB_ARRANGEMENT_SIDEBAR_GROUP_ID] = self.sidebarGroupId;
+    }
+    if (self.claudeSessionId) {
+        encoder[TAB_ARRANGEMENT_CLAUDE_SESSION_ID] = self.claudeSessionId;
+    }
     // If in screenshot mode, encode the live session instead of the synthetic one
     PTYSession *sessionToEncode = self.activeSession;
     BOOL inScreenshotMode = (sessionToEncode.liveSession != nil);
@@ -5759,6 +5771,30 @@ typedef struct {
 
 - (BOOL)isPinned {
     return _pinned;
+}
+
+- (void)setSidebarGroupId:(NSString *)sidebarGroupId {
+    if (_sidebarGroupId == sidebarGroupId || [_sidebarGroupId isEqualToString:sidebarGroupId]) {
+        return;
+    }
+    _sidebarGroupId = [sidebarGroupId copy];
+    [realParentWindow_ invalidateRestorableState];
+}
+
+- (NSString *)sidebarGroupId {
+    return _sidebarGroupId;
+}
+
+- (void)setClaudeSessionId:(NSString *)claudeSessionId {
+    if (_claudeSessionId == claudeSessionId || [_claudeSessionId isEqualToString:claudeSessionId]) {
+        return;
+    }
+    _claudeSessionId = [claudeSessionId copy];
+    [realParentWindow_ invalidateRestorableState];
+}
+
+- (NSString *)claudeSessionId {
+    return _claudeSessionId;
 }
 
 - (void)setTitleOverride:(NSString *)titleOverride {

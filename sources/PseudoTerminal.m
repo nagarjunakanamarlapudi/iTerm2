@@ -143,11 +143,15 @@
 #import "iTermWindowShortcutLabelTitlebarAccessoryViewController.h"
 #include "iTermFileDescriptorClient.h"
 #import <QuartzCore/QuartzCore.h>
+#import <objc/message.h>
 #include <unistd.h>
 
 #import "iTerm2SharedARC-Swift.h"
 
 @class QLPreviewPanel;
+@class ReasoningOverlayHostingView;
+@class ReasoningTerminalParser;
+@class ReasoningTranscriptReader;
 
 NSString *const kCurrentSessionDidChange = @"kCurrentSessionDidChange";
 NSString *const kTerminalWindowControllerWasCreatedNotification = @"kTerminalWindowControllerWasCreatedNotification";
@@ -193,6 +197,7 @@ NSString *const TERMINAL_ARRANGEMENT_TOOLBELT_PROPORTIONS = @"Toolbelt Proportio
 NSString *const TERMINAL_ARRANGEMENT_TITLE_OVERRIDE = @"Title Override";
 NSString *const TERMINAL_ARRANGEMENT_TOOLBELT = @"Toolbelt";
 NSString *const TERMINAL_ARRANGEMENT_ARCHIVE = @"Archive";
+static NSString *const TERMINAL_ARRANGEMENT_SIDEBAR_GROUPS = @"Sidebar Groups";
 
 // This is used to adjust the window's size to preserve rows x cols when the scroller style changes.
 // If the window was maximized to the screen's visible frame, it will be unset to disable this behavior.
@@ -320,6 +325,12 @@ typedef NS_ENUM(int, iTermShouldHaveTitleSeparator) {
 
     NSDictionary *lastArrangement_;
 
+    // Cached sidebar group definitions for persistence in arrangements.
+    NSArray<NSDictionary *> *_cachedSidebarGroups;
+
+    // Track which iTerm session IDs had permission prompts last update cycle
+    NSMutableSet<NSString *> *_previousPermissionSessions;
+
     // If positive, then any window resizing that happens is driven by tmux and
     // shouldn't be reported back to tmux as a user-originated resize.
     int tmuxOriginatedResizeInProgress_;
@@ -432,6 +443,14 @@ typedef NS_ENUM(int, iTermShouldHaveTitleSeparator) {
     iTermIdempotentOperationJoiner *_rightExtraJoiner;
     BOOL _excursionPrevented;
 
+    // Reasoning overlay panel for showing Claude's thinking process
+    ReasoningOverlayHostingView *_reasoningOverlayView;
+    ReasoningTerminalParser *_reasoningParser;
+    ReasoningTranscriptReader *_reasoningTranscriptReader;
+    NSTimer *_reasoningRefreshTimer;
+
+    // Aggregated terminal dashboard overlay
+    DashboardHostingView *_dashboardView;
 }
 
 @synthesize scope = _scope;
@@ -828,6 +847,16 @@ typedef NS_ENUM(int, iTermShouldHaveTitleSeparator) {
     [[self window] setRestorable:YES];
     [[self window] setRestorationClass:[PseudoTerminalRestorer class]];
     self.terminalGuid = [NSString stringWithFormat:@"pty-%@", [NSString uuid]];
+    [self vtReloadSidebar];
+
+    // Periodic sidebar refresh (catches split pane changes, agent spawns, title updates)
+    [NSTimer scheduledTimerWithTimeInterval:1.0 repeats:YES block:^(NSTimer * _Nonnull timer) {
+        if (!self.window) {
+            [timer invalidate];
+            return;
+        }
+        [self vtReloadSidebar];
+    }];
 
     if ([iTermAdvancedSettingsModel useShortcutAccessoryViewController]) {
         _shortcutAccessoryViewController =
@@ -1228,6 +1257,19 @@ ITERM_WEAKLY_REFERENCEABLE
     [self toggleToolbeltVisibilityWithSideEffects:YES];
 }
 
+- (IBAction)toggleVerticalTabSidebar:(id)sender {
+    VTSidebarHostingView *sidebar = _contentView.verticalTabSidebar;
+    if (!sidebar) return;
+    sidebar.hidden = !sidebar.hidden;
+    if (sidebar.hidden) {
+        // Hide sidebar — give full width to terminal
+        self.tabBarControl.hidden = YES;
+        [_contentView.tabBarControl setHidden:YES];
+    }
+    [self repositionWidgets];
+    [self fitWindowToTabs];
+}
+
 - (void)toggleToolbeltVisibilityWithSideEffects:(BOOL)sideEffects {
     _contentView.shouldShowToolbelt = !_contentView.shouldShowToolbelt;
     BOOL didResizeWindow = NO;
@@ -1553,6 +1595,7 @@ ITERM_WEAKLY_REFERENCEABLE
 
 - (void)tabTitleDidChange:(PTYTab *)tab {
     [self updateTouchBarIfNeeded:NO];
+    [self vtReloadSidebar];
 }
 
 - (void)tabAddSwiftyStringsToGraph:(iTermSwiftyStringGraph *)graph {
@@ -3628,6 +3671,23 @@ ITERM_WEAKLY_REFERENCEABLE
     if (!restoreTabsOK) {
         return NO;
     }
+
+    // Restore sidebar groups from arrangement (cache for later even if sidebar is nil)
+    NSArray *savedGroups = arrangement[TERMINAL_ARRANGEMENT_SIDEBAR_GROUPS];
+    if (savedGroups.count > 0) {
+        _cachedSidebarGroups = [savedGroups copy];
+        if (_contentView.verticalTabSidebar) {
+            [_contentView.verticalTabSidebar.dataSource restoreGroups:savedGroups];
+        }
+    }
+
+    // Schedule Claude session auto-resume after a brief delay for shell init
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [weakSelf vtAutoResumeClaudeSessions];
+    });
+
     if (arrangement[TERMINAL_ARRANGEMENT_USE_TRANSPARENCY]) {
         useTransparency_ = [arrangement[TERMINAL_ARRANGEMENT_USE_TRANSPARENCY] boolValue];
     }
@@ -3924,7 +3984,7 @@ ITERM_WEAKLY_REFERENCEABLE
                         encoder:(id<iTermEncoderAdapter>)result {
     NSRect rect = [[self window] frame];
 
-    return [PseudoTerminal populateArrangementWith:tabsOrSession
+    BOOL ok = [PseudoTerminal populateArrangementWith:tabsOrSession
                                  includingContents:includeContents
                                            encoder:result
                                       terminalGuid:self.terminalGuid
@@ -3952,6 +4012,14 @@ ITERM_WEAKLY_REFERENCEABLE
                                                tab:nil
                                        profileGuid:[[[[iTermHotKeyController sharedInstance] profileHotKeyForWindowController:self] profile] objectForKey:KEY_GUID]
                                        isMaximized:[self isMaximized]];
+    // Save sidebar group definitions
+    if (ok) {
+        NSArray *groups = _cachedSidebarGroups ?: [_contentView.verticalTabSidebar.dataSource groupsAsDictionaries];
+        if (groups.count > 0) {
+            result[TERMINAL_ARRANGEMENT_SIDEBAR_GROUPS] = groups;
+        }
+    }
+    return ok;
 }
 
 + (BOOL)populateArrangementWith:(iTermOr<NSArray<PTYTab *> *, PTYSession *> *)tabsOrSession
@@ -6749,6 +6817,8 @@ hidingToolbeltShouldResizeWindow:(BOOL)hidingToolbeltShouldResizeWindow
     [self updateUseMetalInAllTabs];
     [self.scope setValue:self.currentTab.variables forVariableNamed:iTermVariableKeyWindowCurrentTab];
     [self updateForTransparency:self.ptyWindow];
+    [self vtReloadSidebar];
+    [self vtReasoningPanelTabDidChange];
     [self updateDocumentEdited];
     [[iTermFindPasteboard sharedInstance] updateObservers:nil internallyGenerated:NO];
     [self updateBackgroundImage];
@@ -7274,6 +7344,7 @@ hidingToolbeltShouldResizeWindow:(BOOL)hidingToolbeltShouldResizeWindow
     [self updateToolbeltAppearance];
     [self setNeedsUpdateTabObjectCounts:YES];
     [self updateTouchBarIfNeeded:NO];
+    [self vtReloadSidebar];
 
     if (_contentView.tabView.numberOfTabViewItems == 1 &&
         _previousNumberOfTabs == 0 &&
@@ -7774,6 +7845,347 @@ hidingToolbeltShouldResizeWindow:(BOOL)hidingToolbeltShouldResizeWindow
         }
     }
     [_contentView updateTitleAndBorderViews];
+}
+
+- (void)vtReloadSidebar {
+    VTSidebarHostingView *sidebar = _contentView.verticalTabSidebar;
+    if (!sidebar) {
+        return;
+    }
+    // Restore cached groups if sidebar was created after arrangement load
+    if (_cachedSidebarGroups && [sidebar.dataSource groupsAsDictionaries].count == 0) {
+        [sidebar.dataSource restoreGroups:_cachedSidebarGroups];
+        _cachedSidebarGroups = nil;  // Only restore once
+    }
+    NSMutableArray *tabData = [NSMutableArray array];
+    NSTabViewItem *selectedItem = [_contentView.tabView selectedTabViewItem];
+    for (NSTabViewItem *item in [_contentView.tabView tabViewItems]) {
+        PTYTab *tab = [item identifier];
+        PTYSession *session = tab.activeSession;
+        BOOL isActive = (item == selectedItem);
+
+        // Smart tab name: use session name (includes foreground process)
+        NSString *smartName = session.name ?: @"Shell";
+        NSString *title = tab.titleOverride ?: smartName;
+
+        BOOL isBell = (tab.state & kPTYTabBellState) != 0;
+        BOOL hasNewOutput = (tab.state & kPTYTabNewOutputState) != 0;
+        BOOL isDead = (tab.state & kPTYTabDeadState) != 0;
+
+        // Working directory (full path — sidebar shows lastPathComponent, dashboard shows tilde-abbreviated)
+        NSString *cwd = session.currentLocalWorkingDirectory ?: @"";
+
+        // Git branch detection — walk up from cwd to find .git/HEAD
+        NSString *gitBranch = @"";
+        if (cwd.length > 0) {
+            NSString *dir = cwd;
+            for (int i = 0; i < 10; i++) {
+                NSString *headPath = [dir stringByAppendingPathComponent:@".git/HEAD"];
+                NSString *headContent = [NSString stringWithContentsOfFile:headPath encoding:NSUTF8StringEncoding error:nil];
+                if (headContent) {
+                    headContent = [headContent stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                    if ([headContent hasPrefix:@"ref: refs/heads/"]) {
+                        gitBranch = [headContent substringFromIndex:16];
+                    } else if (headContent.length >= 8) {
+                        gitBranch = [headContent substringToIndex:8]; // detached HEAD, show short SHA
+                    }
+                    break;
+                }
+                NSString *parent = [dir stringByDeletingLastPathComponent];
+                if ([parent isEqualToString:dir]) break;
+                dir = parent;
+            }
+        }
+
+        // Last command exit code
+        NSInteger lastExitCode = -1;
+        @try {
+            id<VT100ScreenMarkReading> mark = [session.screen lastCommandMark];
+            if (mark && !mark.isRunning) {
+                lastExitCode = mark.code;
+            }
+        } @catch (NSException *e) {}
+
+        NSMutableDictionary *entry = [@{
+            @"uniqueId": @(tab.uniqueId),
+            @"title": title,
+            @"isActive": @(isActive),
+            @"isBell": @(isBell),
+            @"cwd": cwd,
+            @"gitBranch": gitBranch,
+            @"hasNewOutput": @(hasNewOutput),
+            @"isDead": @(isDead),
+            @"lastExitCode": @(lastExitCode),
+            @"isPinned": @(tab.isPinned),
+        } mutableCopy];
+        if (tab.sidebarGroupId) {
+            entry[@"groupId"] = tab.sidebarGroupId;
+        }
+        if (tab.icon) {
+            entry[@"icon"] = tab.icon;
+        }
+        // Claude detection: check process tree AND session mapping file
+        @try {
+            BOOL foundClaude = NO;
+            // Method 1: process tree (works for direct `claude` invocations)
+            for (PTYSession *s in tab.sessions) {
+                pid_t sPid = s.shell.pid;
+                if (sPid <= 0) continue;
+                if ([self vtIsClaudeInTree:sPid]) {
+                    foundClaude = YES; break;
+                }
+            }
+            // Method 2: check if Claude hook wrote a session mapping for this tab
+            // (works for `claude --teammate-mode tmux` where claude exec's into tmux)
+            if (!foundClaude) {
+                NSString *itermSid = session.sessionId;
+                if (itermSid.length > 0 && [VTClaudeDetector loadSessionMappingWithItermSessionId:itermSid]) {
+                    foundClaude = YES;
+                }
+            }
+            if (foundClaude) {
+                entry[@"isClaude"] = @YES;
+                // Capture Claude session ID from ~/.claude/iterm-sessions/ (written by hook)
+                if (!tab.claudeSessionId) {
+                    NSString *itermSessionId = session.sessionId;
+                    if (itermSessionId.length > 0) {
+                        NSString *sid = [VTClaudeDetector captureClaudeSessionIdForItermSessionId:itermSessionId];
+                        if (sid) { tab.claudeSessionId = sid; }
+                    }
+                }
+                if (tab.claudeSessionId) {
+                    entry[@"claudeSessionId"] = tab.claudeSessionId;
+                }
+                // Find matching team: try --team-name from processes, fall back to most recent
+                NSString *activeTeamName = nil;
+                for (PTYSession *s in tab.sessions) {
+                    @try {
+                        pid_t sPid = s.shell.pid;
+                        if (sPid <= 0) continue;
+                        activeTeamName = [self vtTeamNameForSessionPid:sPid];
+                        if (activeTeamName) break;
+                    } @catch (NSException *e) {}
+                }
+                NSArray<NSDictionary *> *teams = [VTClaudeDetector detectTeamsAsDict];
+                NSDictionary *bestTeam = nil;
+                if (activeTeamName) {
+                    // Exact match by team name from running process
+                    for (NSDictionary *team in teams) {
+                        if ([team[@"name"] isEqualToString:activeTeamName]) {
+                            bestTeam = team; break;
+                        }
+                    }
+                }
+                if (!bestTeam) {
+                    // Fall back: most recent team with agents, created in last 2 hours
+                    NSNumber *bestCreatedAt = @0;
+                    NSTimeInterval twoHoursAgo = [[NSDate date] timeIntervalSince1970] * 1000 - 7200000;
+                    for (NSDictionary *team in teams) {
+                        NSArray *members = team[@"members"];
+                        BOOL hasAgents = NO;
+                        for (NSDictionary *m in members) {
+                            if (![m[@"role"] isEqualToString:@"team-lead"]) { hasAgents = YES; break; }
+                        }
+                        if (!hasAgents) continue;
+                        NSNumber *createdAt = team[@"createdAt"] ?: @0;
+                        if (createdAt.doubleValue < twoHoursAgo) continue; // skip stale teams
+                        if ([createdAt compare:bestCreatedAt] == NSOrderedDescending) {
+                            bestCreatedAt = createdAt;
+                            bestTeam = team;
+                        }
+                    }
+                }
+                // Count sessions running Claude
+                NSInteger claudeCount = 0;
+                for (PTYSession *s in tab.sessions) {
+                    @try {
+                        pid_t sPid = s.shell.pid;
+                        if (sPid > 0 && [self vtIsClaudeInTree:sPid]) claudeCount++;
+                    } @catch (NSException *e) {}
+                }
+                // claudeCount > 1 means lead + agents still running
+                // claudeCount == 1 means only lead running (agents done)
+                // claudeCount == 0 means everything exited
+                if (bestTeam) {
+                    // Build per-agent status: find claude PID in session tree
+                    NSMutableDictionary<NSString *, NSString *> *agentStatus = [NSMutableDictionary dictionary];
+                    for (PTYSession *s in tab.sessions) {
+                        @try {
+                            pid_t sPid = s.shell.pid;
+                            if (sPid <= 0) continue;
+                            NSString *aName = [self vtAgentNameInTree:sPid];
+                            if (aName) agentStatus[aName.lowercaseString] = @"running";
+                        } @catch (NSException *e) {}
+                    }
+
+                    // Count sessions with Claude prompts waiting for input (terminal scanning)
+                    // Match ONLY selection/trust/permission prompts — not the normal input prompt.
+                    // These prompts show numbered options (e.g. "1. Yes") AND "Esc to cancel" together.
+                    NSInteger sessionsNeedingInput = 0;
+                    @try {
+                        for (PTYSession *s in tab.sessions) {
+                            NSString *gridContent = [s.screen.currentGrid compactLineDump];
+                            if (gridContent.length == 0) continue;
+                            NSArray *lines = [gridContent componentsSeparatedByString:@"\n"];
+                            NSInteger startIdx = MAX(0, (NSInteger)lines.count - 8);
+                            NSArray *tail = [lines subarrayWithRange:NSMakeRange(startIdx, lines.count - startIdx)];
+                            NSString *tailStr = [tail componentsJoinedByString:@"\n"];
+                            // compactLineDump uses dots for spaces
+                            BOOL hasEscCancel = [tailStr containsString:@"Esc.to.cancel"];
+                            BOOL hasNumberedOption = [tailStr containsString:@"1."] || [tailStr containsString:@"2."];
+                            BOOL hasApproval = [tailStr containsString:@"requires.approval"] || [tailStr containsString:@"Do.you.want.to.proceed"];
+                            if (hasEscCancel && (hasNumberedOption || hasApproval)) {
+                                sessionsNeedingInput++;
+                            }
+                        }
+
+                        // Fire macOS notification for detected prompts (debounced)
+                        if (sessionsNeedingInput > 0) {
+                            static NSTimeInterval lastScanNotification = 0;
+                            NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+                            if (now - lastScanNotification > 10.0) {
+                                lastScanNotification = now;
+                                NSString *cwd = session.currentLocalWorkingDirectory ?: @"";
+                                NSString *proj = [cwd lastPathComponent] ?: @"Claude";
+                                [[iTermNotificationController sharedInstance]
+                                    notifyClaudePermission:@""
+                                                     tool:@""
+                                                  project:proj
+                                              windowIndex:(int)[self.window windowNumber]
+                                                 tabIndex:0
+                                                viewIndex:0];
+                            }
+                        }
+                    } @catch (NSException *e) {}
+
+                    // Also check permission state files
+                    NSDictionary<NSString *, NSDictionary *> *permState = [VTClaudeDetector pendingPermissions];
+                    NSMutableSet<NSString *> *tabSessionIds = [NSMutableSet set];
+                    for (PTYSession *s in tab.sessions) {
+                        if (s.sessionId.length > 0) [tabSessionIds addObject:s.sessionId];
+                    }
+                    NSMutableArray<NSDictionary *> *tabPermissions = [NSMutableArray array];
+                    for (NSDictionary *perm in permState.allValues) {
+                        NSString *permItermSid = perm[@"iterm_session_id"] ?: @"";
+                        if ([tabSessionIds containsObject:permItermSid]) {
+                            [tabPermissions addObject:perm];
+                        }
+                    }
+
+                    // Merge: total blocked = max of terminal-scanned vs hook-reported
+                    NSInteger totalBlocked = MAX(sessionsNeedingInput, (NSInteger)tabPermissions.count);
+
+                    NSMutableArray *agents = [NSMutableArray array];
+                    NSInteger blockedAssigned = 0;
+                    for (NSDictionary *member in bestTeam[@"members"]) {
+                        NSString *name = member[@"name"] ?: @"agent";
+                        NSString *role = member[@"role"] ?: @"agent";
+                        if ([role isEqualToString:@"team-lead"]) continue;
+                        // If agent process not found, check if any dead session has non-zero exit → errored
+                        NSString *status = agentStatus[name.lowercaseString];
+                        if (!status) {
+                            BOOL anyDeadWithError = NO;
+                            for (PTYSession *s in tab.sessions) {
+                                if ((s.exited) && s.shell.pid <= 0) {
+                                    @try {
+                                        id<VT100ScreenMarkReading> mark = [s.screen lastCommandMark];
+                                        if (mark && !mark.isRunning && mark.code != 0) {
+                                            anyDeadWithError = YES; break;
+                                        }
+                                    } @catch (NSException *e) {}
+                                }
+                            }
+                            status = anyDeadWithError ? @"errored" : @"completed";
+                        }
+
+                        // Override: if agent is running and we have unassigned blocked sessions
+                        NSString *pendingTool = @"";
+                        NSString *permTimestamp = @"";
+                        if ([status isEqualToString:@"running"] && blockedAssigned < totalBlocked) {
+                            status = @"waitingForPermission";
+                            blockedAssigned++;
+                            // Try to get tool info from hook-reported permissions
+                            if (tabPermissions.count > 0) {
+                                NSDictionary *perm = tabPermissions.firstObject;
+                                pendingTool = perm[@"tool"] ?: @"";
+                                NSNumber *ts = perm[@"timestamp"];
+                                if (ts) permTimestamp = [ts stringValue];
+                                [tabPermissions removeObjectAtIndex:0];
+                            }
+                        }
+
+                        NSMutableDictionary *agentEntry = [@{
+                            @"name": name,
+                            @"role": role,
+                            @"status": status,
+                        } mutableCopy];
+                        if (pendingTool.length > 0) agentEntry[@"pendingTool"] = pendingTool;
+                        if (permTimestamp.length > 0) agentEntry[@"permissionTimestamp"] = permTimestamp;
+                        [agents addObject:agentEntry];
+                    }
+                    if (agents.count > 0) {
+                        entry[@"agents"] = agents;
+                    }
+                } else {
+                    // Solo Claude tab (no team) — check if any permission file matches this tab
+                    NSDictionary<NSString *, NSDictionary *> *permState = [VTClaudeDetector pendingPermissions];
+                    NSString *leadItermSid = session.sessionId;
+                    for (NSDictionary *perm in permState.allValues) {
+                        NSString *permItermSid = perm[@"iterm_session_id"] ?: @"";
+                        if ([permItermSid isEqualToString:leadItermSid]) {
+                            entry[@"isBell"] = @YES;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                // Don't clear claudeSessionId here — preserve it for session restore.
+                // It gets cleared after a successful resume in vtAutoResumeClaudeSessions.
+                // Pass it to the data source so the dashboard can show "resumable" state.
+                if (tab.claudeSessionId) {
+                    entry[@"claudeSessionId"] = tab.claudeSessionId;
+                }
+            }
+
+            // Feed active Claude session into reasoning overlay (if visible)
+            if (_reasoningOverlayView && _reasoningOverlayView.isOverlayVisible && foundClaude && isActive) {
+                static NSTimeInterval lastReasoningUpdate = 0;
+                NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+                if (now - lastReasoningUpdate > 0.5) {
+                    lastReasoningUpdate = now;
+                    [self vtUpdateReasoningPanelForActiveTab];
+                }
+            }
+        } @catch (NSException *e) {}
+
+        // Terminal scanning for solo Claude tabs (no team) — set bell on tab
+        @try {
+            if ([entry[@"isClaude"] boolValue] && !entry[@"agents"]) {
+                for (PTYSession *s in tab.sessions) {
+                    NSString *gridContent = [s.screen.currentGrid compactLineDump];
+                    if (gridContent.length > 0) {
+                        NSArray *lines = [gridContent componentsSeparatedByString:@"\n"];
+                        NSInteger startIdx = MAX(0, (NSInteger)lines.count - 8);
+                        NSArray *tail = [lines subarrayWithRange:NSMakeRange(startIdx, lines.count - startIdx)];
+                        NSString *tailStr = [tail componentsJoinedByString:@"\n"];
+                        // compactLineDump uses dots for spaces
+                        BOOL hasEscCancel = [tailStr containsString:@"Esc.to.cancel"];
+                        BOOL hasNumberedOption = [tailStr containsString:@"1."] || [tailStr containsString:@"2."];
+                        BOOL hasApproval = [tailStr containsString:@"requires.approval"] || [tailStr containsString:@"Do.you.want.to.proceed"];
+                        if (hasEscCancel && (hasNumberedOption || hasApproval)) {
+                            entry[@"isBell"] = @YES;
+                            break;
+                        }
+                    }
+                }
+            }
+        } @catch (NSException *e) {}
+
+        [tabData addObject:entry];
+    }
+    [sidebar reloadTabs:tabData];
+    sidebar.sidebarDelegate = (id<VTSidebarDelegate>)self;
+
 }
 
 - (void)updateTabProgress {
@@ -12930,6 +13342,7 @@ typedef NS_ENUM(NSUInteger, iTermBroadcastCommand) {
     if (self.numberOfTabs == 1) {
         [self setWindowTitle];
     }
+    [self vtReloadSidebar];
 }
 
 - (void)tab:(PTYTab *)tab didSetMetalEnabled:(BOOL)useMetal {
@@ -13616,6 +14029,395 @@ backgroundColor:(NSColor *)backgroundColor {
     if (_sessionRestorationCount == 0) {
         [[NSNotificationCenter defaultCenter] postNotificationName:iTermSessionRestorationDidCompleteNotification object:self];
     }
+}
+
+// MARK: - VTSidebarDelegate (Vertical Tab Sidebar)
+
+- (void)sidebarDidSelectTabWithUniqueId:(NSInteger)uniqueId {
+    for (NSTabViewItem *item in [_contentView.tabView tabViewItems]) {
+        PTYTab *tab = [item identifier];
+        if (tab.uniqueId == uniqueId) {
+            [_contentView.tabView selectTabViewItem:item];
+            return;
+        }
+    }
+}
+
+- (void)sidebarDidCloseTabWithUniqueId:(NSInteger)uniqueId {
+    for (NSTabViewItem *item in [_contentView.tabView tabViewItems]) {
+        PTYTab *tab = [item identifier];
+        if (tab.uniqueId == uniqueId) {
+            [self closeTab:tab soft:NO];
+            return;
+        }
+    }
+}
+
+- (void)sidebarDidRequestNewTab {
+    [[iTermController sharedInstance] newSessionWithSameProfile:nil newWindow:NO];
+}
+
+- (void)sidebarDidReorderTabWithUniqueId:(NSInteger)uniqueId toIndex:(NSInteger)toIndex {
+    // TODO: implement tab reordering
+}
+
+- (NSString *)sidebarTitleForTabWithUniqueId:(NSInteger)uniqueId {
+    for (NSTabViewItem *item in [_contentView.tabView tabViewItems]) {
+        PTYTab *tab = [item identifier];
+        if (tab.uniqueId == uniqueId) {
+            return tab.title ?: @"Shell";
+        }
+    }
+    return @"Shell";
+}
+
+- (void)sidebarDidSelectAgentWithName:(NSString *)name inTab:(NSInteger)uniqueId {
+    for (NSTabViewItem *item in [_contentView.tabView tabViewItems]) {
+        PTYTab *tab = [item identifier];
+        if (tab.uniqueId != uniqueId) continue;
+
+        [_contentView.tabView selectTabViewItem:item];
+
+        // Build complete map: agentName → session
+        NSMutableDictionary<NSString *, PTYSession *> *agentMap = [NSMutableDictionary dictionary];
+        for (PTYSession *session in tab.sessions) {
+            @try {
+                pid_t pid = session.shell.pid;
+                if (pid <= 0) continue;
+                NSString *foundName = [self vtAgentNameInTree:pid];
+                if (foundName) {
+                    agentMap[foundName.lowercaseString] = session;
+                }
+            } @catch (NSException *e) {}
+        }
+        PTYSession *target = agentMap[name.lowercaseString];
+        if (target) {
+            [tab setActiveSession:target];
+            [[self window] makeFirstResponder:[target mainResponder]];
+        }
+        break;
+    }
+}
+
+- (void)vtAutoResumeClaudeSessions {
+    NSCharacterSet *allowed = [NSCharacterSet characterSetWithCharactersInString:
+        @"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"];
+
+    for (NSTabViewItem *item in [_contentView.tabView tabViewItems]) {
+        PTYTab *tab = [item identifier];
+        NSString *sessionId = tab.claudeSessionId;
+        if (!sessionId.length) continue;
+
+        // Validate session ID (no shell injection)
+        if ([sessionId rangeOfCharacterFromSet:[allowed invertedSet]].location != NSNotFound) {
+            continue;
+        }
+
+        // Find the lead session — the one whose iTerm session ID maps to this Claude session ID.
+        // For tabs with agent split panes, activeSession might be an agent pane, not the lead.
+        PTYSession *leadSession = nil;
+        for (PTYSession *s in tab.sessions) {
+            if (!s || s.shell.pid <= 0) continue;
+            NSString *mapped = [VTClaudeDetector loadSessionMappingWithItermSessionId:s.sessionId];
+            if ([mapped isEqualToString:sessionId]) {
+                leadSession = s;
+                break;
+            }
+        }
+        // Fall back to the first session with a live shell
+        if (!leadSession) {
+            for (PTYSession *s in tab.sessions) {
+                if (s && s.shell.pid > 0) {
+                    leadSession = s;
+                    break;
+                }
+            }
+        }
+        if (!leadSession) continue;
+
+        // Send the resume command to the lead session
+        NSString *cmd = [NSString stringWithFormat:@"claude --resume %@\n", sessionId];
+        [leadSession writeTaskNoBroadcast:cmd];
+
+        // Don't close agent panes — the resumed lead will re-spawn agents and
+        // reuse or create panes as needed. Closing here races with agent spawning.
+
+        // Clear so we don't resume again
+        tab.claudeSessionId = nil;
+    }
+}
+
+- (void)sidebarDidMoveTabWithUniqueId:(NSInteger)uniqueId toGroupId:(nullable NSString *)groupId {
+    for (NSTabViewItem *item in [_contentView.tabView tabViewItems]) {
+        PTYTab *tab = [item identifier];
+        if (tab.uniqueId == uniqueId) {
+            tab.sidebarGroupId = groupId;
+            return;
+        }
+    }
+}
+
+- (void)sidebarDidRenameTabWithUniqueId:(NSInteger)uniqueId newName:(NSString *)newName {
+    for (NSTabViewItem *item in [_contentView.tabView tabViewItems]) {
+        PTYTab *tab = [item identifier];
+        if (tab.uniqueId == uniqueId) {
+            tab.titleOverride = newName;
+            return;
+        }
+    }
+}
+
+- (void)sidebarDidUpdateGroups:(NSArray<NSDictionary<NSString *, id> *> *)groups {
+    // Cache for encoding in arrangement. Also triggers invalidateRestorableState.
+    _cachedSidebarGroups = [groups copy];
+    [self invalidateRestorableState];
+}
+
+/// Search process tree for --team-name
+- (NSString *)vtTeamNameForSessionPid:(pid_t)pid {
+    NSString *tn = [VTClaudeDetector teamNameForPid:pid];
+    if (tn) return tn;
+    for (NSNumber *cp in [self vtChildPIDsOf:pid]) {
+        tn = [VTClaudeDetector teamNameForPid:cp.intValue];
+        if (tn) return tn;
+        for (NSNumber *gcp in [self vtChildPIDsOf:cp.intValue]) {
+            tn = [VTClaudeDetector teamNameForPid:gcp.intValue];
+            if (tn) return tn;
+        }
+    }
+    return nil;
+}
+
+/// Check if a Claude binary exists in process tree (up to 2 levels: login→zsh→claude)
+- (BOOL)vtIsClaudeInTree:(pid_t)pid {
+    if ([VTClaudeDetector isClaudeBinaryWithPid:pid]) return YES;
+    for (NSNumber *cp in [self vtChildPIDsOf:pid]) {
+        if ([VTClaudeDetector isClaudeBinaryWithPid:cp.intValue]) return YES;
+        for (NSNumber *gcp in [self vtChildPIDsOf:cp.intValue]) {
+            if ([VTClaudeDetector isClaudeBinaryWithPid:gcp.intValue]) return YES;
+        }
+    }
+    return NO;
+}
+
+/// Find --agent-name in process tree (up to 2 levels)
+- (NSString *)vtAgentNameInTree:(pid_t)pid {
+    if ([VTClaudeDetector isClaudeBinaryWithPid:pid]) {
+        NSString *n = [VTClaudeDetector agentNameForPid:pid]; if (n) return n;
+    }
+    for (NSNumber *cp in [self vtChildPIDsOf:pid]) {
+        if ([VTClaudeDetector isClaudeBinaryWithPid:cp.intValue]) {
+            NSString *n = [VTClaudeDetector agentNameForPid:cp.intValue]; if (n) return n;
+        }
+        for (NSNumber *gcp in [self vtChildPIDsOf:cp.intValue]) {
+            if ([VTClaudeDetector isClaudeBinaryWithPid:gcp.intValue]) {
+                NSString *n = [VTClaudeDetector agentNameForPid:gcp.intValue]; if (n) return n;
+            }
+        }
+    }
+    return nil;
+}
+
+/// Search process tree up to 3 levels deep for --agent-name (only on Claude binaries)
+- (NSString *)vtAgentNameForSessionPid:(pid_t)pid {
+    // Check the process itself — must be a Claude binary
+    if ([VTClaudeDetector isClaudeBinaryWithPid:pid]) {
+        NSString *name = [VTClaudeDetector agentNameForPid:pid];
+        if (name) return name;
+    }
+    // Check children
+    NSArray<NSNumber *> *children = [self vtChildPIDsOf:pid];
+    for (NSNumber *childPid in children) {
+        if ([VTClaudeDetector isClaudeBinaryWithPid:childPid.intValue]) {
+            NSString *name = [VTClaudeDetector agentNameForPid:childPid.intValue];
+            if (name) return name;
+        }
+        // Check grandchildren
+        NSArray<NSNumber *> *grandchildren = [self vtChildPIDsOf:childPid.intValue];
+        for (NSNumber *gcPid in grandchildren) {
+            if ([VTClaudeDetector isClaudeBinaryWithPid:gcPid.intValue]) {
+                NSString *name = [VTClaudeDetector agentNameForPid:gcPid.intValue];
+                if (name) return name;
+            }
+        }
+    }
+    return nil;
+}
+
+- (NSArray<NSNumber *> *)vtChildPIDsOf:(pid_t)parentPid {
+    int bufSize = proc_listpids(PROC_ALL_PIDS, 0, NULL, 0);
+    if (bufSize <= 0) return @[];
+    int count = bufSize / sizeof(pid_t);
+    pid_t *pids = calloc(count, sizeof(pid_t));
+    int actualSize = proc_listpids(PROC_ALL_PIDS, 0, pids, bufSize);
+    int actualCount = actualSize / sizeof(pid_t);
+    NSMutableArray *children = [NSMutableArray array];
+    for (int i = 0; i < actualCount; i++) {
+        if (pids[i] <= 0) continue;
+        struct proc_bsdinfo info;
+        int infoSize = proc_pidinfo(pids[i], PROC_PIDTBSDINFO, 0, &info, sizeof(info));
+        if (infoSize > 0 && info.pbi_ppid == (uint32_t)parentPid) {
+            [children addObject:@(pids[i])];
+        }
+    }
+    free(pids);
+    return children;
+}
+
+#pragma mark - Reasoning Overlay Panel
+
+- (IBAction)toggleReasoningPanel:(id)sender {
+    if (!_reasoningOverlayView) {
+        _reasoningOverlayView = [[ReasoningOverlayHostingView alloc] initWithFrame:NSZeroRect];
+        _reasoningParser = [[ReasoningTerminalParser alloc] init];
+
+        // Add as subview of iTermRootTerminalView at highest z-order
+        [_contentView addSubview:_reasoningOverlayView positioned:NSWindowAbove relativeTo:nil];
+        [_reasoningOverlayView repositionInSuperview];
+    }
+
+    if (_reasoningOverlayView.isOverlayVisible) {
+        [_reasoningOverlayView hideOverlay];
+        // Stop the dedicated reasoning timer
+        [_reasoningRefreshTimer invalidate];
+        _reasoningRefreshTimer = nil;
+    } else {
+        [_reasoningOverlayView showOverlay];
+        [self vtUpdateReasoningPanelForActiveTab];
+        // Start a dedicated 200ms reasoning refresh timer
+        [_reasoningRefreshTimer invalidate];
+        _reasoningRefreshTimer = [NSTimer scheduledTimerWithTimeInterval:0.2
+                                                                 target:self
+                                                               selector:@selector(vtRefreshReasoning)
+                                                               userInfo:nil
+                                                                repeats:YES];
+    }
+}
+
+- (void)vtUpdateReasoningPanelForActiveTab {
+    if (!_reasoningOverlayView || !_reasoningOverlayView.isOverlayVisible) {
+        return;
+    }
+    PTYTab *tab = self.currentTab;
+    if (!tab) return;
+
+    PTYSession *session = tab.activeSession;
+    BOOL foundClaude = NO;
+    for (PTYSession *s in tab.sessions) {
+        @try {
+            pid_t sPid = s.shell.pid;
+            if (sPid <= 0) continue;
+            if ([self vtIsClaudeInTree:sPid]) {
+                foundClaude = YES;
+                break;
+            }
+        } @catch (NSException *e) {}
+    }
+    if (!foundClaude && session.sessionId.length > 0) {
+        if ([VTClaudeDetector loadSessionMappingWithItermSessionId:session.sessionId]) {
+            foundClaude = YES;
+        }
+    }
+    if (foundClaude) {
+        // Resolve Claude session ID (not iTerm session ID)
+        NSString *claudeSid = tab.claudeSessionId;
+        if (!claudeSid && session.sessionId.length > 0) {
+            claudeSid = [VTClaudeDetector loadSessionMappingWithItermSessionId:session.sessionId];
+            if (claudeSid) {
+                tab.claudeSessionId = claudeSid; // Cache for future calls
+            }
+        }
+        NSString *sid = claudeSid ?: session.sessionId;
+
+        [_reasoningParser parseSession:session sessionId:sid into:_reasoningOverlayView.dataSource];
+        [_reasoningOverlayView contentDidUpdate];
+
+        // Start transcript reader if not already watching
+        if (!_reasoningTranscriptReader && claudeSid) {
+            NSURL *transcript = [ReasoningTranscriptReader findTranscriptWithSessionId:claudeSid];
+            if (transcript) {
+                _reasoningTranscriptReader = [[ReasoningTranscriptReader alloc] init];
+                [_reasoningTranscriptReader startWatchingWithTranscriptURL:transcript
+                                                                sessionId:claudeSid
+                                                               dataSource:_reasoningOverlayView.dataSource];
+            }
+        }
+    }
+}
+
+- (void)vtRefreshReasoning {
+    [self vtUpdateReasoningPanelForActiveTab];
+}
+
+- (void)vtReasoningPanelTabDidChange {
+    if (!_reasoningOverlayView) return;
+
+    if (_reasoningTranscriptReader) {
+        [_reasoningTranscriptReader stopWatching];
+        _reasoningTranscriptReader = nil;
+    }
+    [_reasoningOverlayView.dataSource clearAll];
+    [self vtUpdateReasoningPanelForActiveTab];
+}
+
+#pragma mark - Aggregated Terminal Dashboard
+
+- (IBAction)toggleDashboard:(id)sender {
+    if (!_dashboardView) {
+        _dashboardView = [[DashboardHostingView alloc] initWithFrame:NSZeroRect];
+
+        // Get the sidebar data source
+        VTSidebarHostingView *sidebar = _contentView.verticalTabSidebar;
+        if (sidebar) {
+            [_dashboardView configureWithDataSource:sidebar.dataSource delegate:sidebar.dataSource.delegate];
+        }
+
+        // Wire session resume callback
+        __weak typeof(self) weakSelf = self;
+        _dashboardView.onResumeSession = ^(NSString *sessionId, NSString *projectPath) {
+            [weakSelf vtResumeClaudeSession:sessionId inProjectPath:projectPath];
+        };
+
+        // Set as the primary dashboard view on iTermRootTerminalView
+        _contentView.dashboardView = _dashboardView;
+    }
+
+    // Toggle dashboard mode: hides tabView, shows dashboard as primary content
+    [_contentView setDashboardMode:!_contentView.isDashboardMode];
+}
+
+/// Resume a Claude session by creating a new tab and running `claude --resume <id>`
+- (void)vtResumeClaudeSession:(NSString *)sessionId inProjectPath:(NSString *)projectPath {
+    // Validate session ID (prevent injection)
+    NSCharacterSet *allowed = [NSCharacterSet characterSetWithCharactersInString:@"abcdefABCDEF0123456789-"];
+    NSCharacterSet *invalid = [allowed invertedSet];
+    if ([sessionId rangeOfCharacterFromSet:invalid].location != NSNotFound) {
+        return;
+    }
+
+    // Create a new tab
+    [[iTermController sharedInstance] newSessionWithSameProfile:nil newWindow:NO];
+
+    // After shell init (1 second), run the resume command
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        PTYSession *session = self.currentSession;
+        if (!session) return;
+
+        // Change to project directory and resume
+        if (projectPath.length > 0) {
+            NSString *cmd = [NSString stringWithFormat:@"cd %@ && claude --resume %@\n",
+                [projectPath stringWithEscapedShellCharactersIncludingNewlines:YES],
+                sessionId];
+            [session writeTaskNoBroadcast:cmd];
+        } else {
+            NSString *cmd = [NSString stringWithFormat:@"claude --resume %@\n", sessionId];
+            [session writeTaskNoBroadcast:cmd];
+        }
+    });
+
+    // Exit dashboard mode
+    [_contentView setDashboardMode:NO];
 }
 
 @end

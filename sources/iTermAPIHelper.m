@@ -422,6 +422,10 @@ static BOOL iTermAPIHelperLastApplescriptAuthRequiredSetting;
 }
 
 + (BOOL)internalRequireApplescriptAuth {
+#ifdef DEBUG
+    // Dev builds: always allow API connections without auth
+    return NO;
+#endif
     NSString *actualContents = nil;
     switch ([self noAuthStatus:&actualContents]) {
         case iTermNoAuthStatusNone:

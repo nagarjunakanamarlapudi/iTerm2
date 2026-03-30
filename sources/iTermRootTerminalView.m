@@ -10,6 +10,7 @@
 
 #import "DebugLogging.h"
 #import "iTermLayoutCalculator.h"
+#import "iTerm2SharedARC-Swift.h"
 
 #import "NSAppearance+iTerm.h"
 #import "NSEvent+iTerm.h"
@@ -161,6 +162,8 @@ NS_CLASS_AVAILABLE_MAC(10_14)
     iTermImageView *_backgroundImage NS_AVAILABLE_MAC(10_14);
     NSView *_workaroundView;  // 10.14 only. See issue 8701.
     iTermLayerBackedSolidColorView *_notchMask NS_AVAILABLE_MAC(12_0);
+    VTSidebarHostingView *_verticalTabSidebar;
+    BOOL _isDashboardMode;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect
@@ -173,6 +176,12 @@ NS_CLASS_AVAILABLE_MAC(10_14)
 
         self.autoresizesSubviews = YES;
         _leftTabBarPreferredWidth = round([iTermPreferences doubleForKey:kPreferenceKeyLeftTabBarWidth]);
+        // If using the default value, use 15% of screen width instead (adapts to any display)
+        if (_leftTabBarPreferredWidth == 200) {
+            CGFloat screenWidth = [NSScreen mainScreen].frame.size.width;
+            CGFloat percentBased = round(screenWidth * 0.15);
+            _leftTabBarPreferredWidth = MAX(percentBased, 160);
+        }
         [self setLeftTabBarWidthFromPreferredWidth];
 
         _backgroundImage = [[iTermImageView alloc] init];
@@ -234,6 +243,10 @@ NS_CLASS_AVAILABLE_MAC(10_14)
             case PSMTab_LeftTab:
                 _tabBarControl.orientation = PSMTabBarVerticalOrientation;
                 [self setTabBarControlAutoresizingMask:(NSViewHeightSizable | NSViewMaxXMargin)];
+                // Create our SwiftUI vertical tab sidebar
+                _verticalTabSidebar = [[VTSidebarHostingView alloc] initWithFrame:NSMakeRect(0, 0, _leftTabBarPreferredWidth, frameRect.size.height)];
+                _verticalTabSidebar.autoresizingMask = NSViewHeightSizable | NSViewMaxXMargin;
+                [self addSubview:_verticalTabSidebar];
                 break;
         }
         [self addSubview:_tabBarBacking];
@@ -1186,6 +1199,10 @@ NS_CLASS_AVAILABLE_MAC(10_14)
 }
 
 - (BOOL)tabBarShouldBeVisibleWithAdditionalTabs:(int)numberOfAdditionalTabs {
+    // Our vertical sidebar is always visible when tab position is Left
+    if (_verticalTabSidebar && [iTermPreferences intForKey:kPreferenceKeyTabPosition] == PSMTab_LeftTab) {
+        return YES;
+    }
     if (([_delegate anyFullScreen] || [_delegate enteringLionFullscreen]) &&
         ![iTermPreferences boolForKey:kPreferenceKeyShowFullscreenTabBar]) {
         DLog(@"Tabbar should not be visible because in full screen");
@@ -1458,10 +1475,19 @@ NS_CLASS_AVAILABLE_MAC(10_14)
     inputs.tabPosition = kLayoutTabPositionLeft;
     iTermLayoutOutputs outputs = [iTermLayoutCalculator calculateLayoutWithInputs:inputs];
 
-    // Apply tab bar frame and settings
-    self.tabBarControl.insets = [self.delegate tabBarInsets];
-    [self setTabBarFrame:outputs.tabBarFrame];
-    [self setTabBarControlAutoresizingMask:(NSViewHeightSizable | NSViewMaxXMargin)];
+    if (_verticalTabSidebar) {
+        // Use our SwiftUI sidebar instead of PSMTabBarControl
+        _verticalTabSidebar.frame = outputs.tabBarFrame;
+        _verticalTabSidebar.hidden = NO;
+        // Hide the original PSM tab bar — our sidebar replaces it
+        self.tabBarControl.hidden = YES;
+        _tabBarBacking.hidden = YES;
+    } else {
+        // Fallback: use standard PSM tab bar
+        self.tabBarControl.insets = [self.delegate tabBarInsets];
+        [self setTabBarFrame:outputs.tabBarFrame];
+        [self setTabBarControlAutoresizingMask:(NSViewHeightSizable | NSViewMaxXMargin)];
+    }
 
     // Apply tab view frame
     DLog(@"repositionWidgets - Set tab view frame to %@", NSStringFromRect(outputs.tabViewFrame));
@@ -1600,19 +1626,9 @@ NS_CLASS_AVAILABLE_MAC(10_14)
 }
 
 - (CGFloat)minimumTabBarWidth {
-    const iTermPreferencesTabStyle preferredStyle = [iTermPreferences intForKey:kPreferenceKeyTabStyle];
-    switch (preferredStyle) {
-        case TAB_STYLE_DARK:
-        case TAB_STYLE_LIGHT:
-        case TAB_STYLE_AUTOMATIC:
-        case TAB_STYLE_DARK_HIGH_CONTRAST:
-        case TAB_STYLE_LIGHT_HIGH_CONTRAST:
-            return 50;
-        case TAB_STYLE_MINIMAL:
-        case TAB_STYLE_COMPACT:
-            return 114;
-    }
-    assert(NO);
+    // 8% of screen width, floored at 120px
+    CGFloat screenWidth = [NSScreen mainScreen].frame.size.width;
+    return MAX(round(screenWidth * 0.08), 120);
 }
 
 - (CGFloat)leftTabBarWidthForPreferredWidth:(CGFloat)preferredWidth contentWidth:(CGFloat)contentWidth {
@@ -1909,6 +1925,41 @@ NS_CLASS_AVAILABLE_MAC(10_14)
 
 - (NSColor *)genericStatusBarContainerBackgroundColor {
     return [self.delegate rootTerminalViewTabBarBackgroundColorIgnoringTabColor:YES];
+}
+
+#pragma mark - Dashboard Mode
+
+- (BOOL)isDashboardMode {
+    return _isDashboardMode;
+}
+
+- (void)setDashboardMode:(BOOL)dashboardMode {
+    if (_isDashboardMode == dashboardMode) return;
+    _isDashboardMode = dashboardMode;
+    if (dashboardMode) {
+        _tabView.hidden = YES;
+        if (_dashboardView) {
+            _dashboardView.hidden = NO;
+            _dashboardView.frame = _tabView.frame;
+            _dashboardView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+        }
+    } else {
+        _tabView.hidden = NO;
+        _dashboardView.hidden = YES;
+    }
+}
+
+- (void)setDashboardView:(NSView *)dashboardView {
+    if (_dashboardView) {
+        [_dashboardView removeFromSuperview];
+    }
+    _dashboardView = dashboardView;
+    if (dashboardView) {
+        dashboardView.frame = _tabView.frame;
+        dashboardView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+        [self addSubview:dashboardView positioned:NSWindowAbove relativeTo:_tabView];
+        dashboardView.hidden = !_isDashboardMode;
+    }
 }
 
 @end

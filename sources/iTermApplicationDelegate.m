@@ -845,6 +845,10 @@ static BOOL hasBecomeActive = NO;
     }
     quittingBecauseLastWindowClosed_ =
         [iTermPreferences boolForKey:kPreferenceKeyQuitWhenAllWindowsClosed];
+    // User closed all windows — erase saved state so tabs don't restore on next launch.
+    if (quittingBecauseLastWindowClosed_) {
+        [[iTermRestorableStateController sharedInstance] eraseStateForCleanStart];
+    }
     DLog(@"Returning %@ from pref", @(quittingBecauseLastWindowClosed_));
     return quittingBecauseLastWindowClosed_;
 }
@@ -985,7 +989,7 @@ static BOOL hasBecomeActive = NO;
         [[iTermController sharedInstance] killRestorableSessions];
     }
 
-    // Last chance before windows get closed.
+    // Save restorable state BEFORE windows close (captures current tabs/groups).
     DLog(@"Post applicationWillTerminate which triggers saving restorable state.");
     [[NSNotificationCenter defaultCenter] postNotificationName:iTermApplicationWillTerminate object:nil];
 
@@ -1362,6 +1366,9 @@ void TurnOnDebugLoggingAutomatically(void) {
                                     window:nil];
     }
     DLog(@"didFinishLaunching");
+
+    // AiTerm: first-launch setup (hooks, directories, preferences)
+    [AiTermFirstLaunchSetup runIfNeeded];
 
     [iTermLaunchExperienceController applicationDidFinishLaunching];
     [[iTermLaunchServices sharedInstance] registerForiTerm2Scheme];
